@@ -325,13 +325,14 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
         picker.addItems(withTitles: [
             "small  (~460 MB, recommended)",
             "base  (~140 MB, faster)",
-            "medium  (~1.5 GB, most accurate)",
+            "medium  (~1.5 GB, more accurate)",
+            "large  (~3 GB, most accurate)",
         ])
-        for (i, name) in ["small", "base", "medium"].enumerated() {
+        for (i, name) in ["small", "base", "medium", "large"].enumerated() {
             picker.itemArray[i].representedObject = name
         }
         let savedModel = UserDefaults.standard.string(forKey: "whisperModel") ?? "small"
-        if let idx = ["small", "base", "medium"].firstIndex(of: savedModel) {
+        if let idx = ["small", "base", "medium", "large"].firstIndex(of: savedModel) {
             picker.selectItem(at: idx)
         }
         picker.target = self

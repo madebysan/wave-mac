@@ -10,34 +10,124 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
     private var modelSpinner: NSProgressIndicator?
     private var stateObserver: Any?
 
-    // Whisper-supported languages (most common ones)
-    private let languages: [(code: String, name: String)] = [
+    // Popular languages shown at top of the picker
+    private let popularLanguages: [(code: String, name: String)] = [
         ("en", "English"),
         ("es", "Spanish"),
         ("fr", "French"),
         ("de", "German"),
         ("it", "Italian"),
         ("pt", "Portuguese"),
-        ("nl", "Dutch"),
-        ("pl", "Polish"),
-        ("ru", "Russian"),
-        ("uk", "Ukrainian"),
-        ("ja", "Japanese"),
         ("zh", "Chinese"),
+        ("ja", "Japanese"),
         ("ko", "Korean"),
         ("ar", "Arabic"),
         ("hi", "Hindi"),
-        ("tr", "Turkish"),
-        ("sv", "Swedish"),
-        ("da", "Danish"),
-        ("no", "Norwegian"),
-        ("fi", "Finnish"),
+        ("ru", "Russian"),
+    ]
+
+    // All Whisper-supported languages (99 total)
+    private let allLanguages: [(code: String, name: String)] = [
+        ("af", "Afrikaans"),
+        ("am", "Amharic"),
+        ("ar", "Arabic"),
+        ("as", "Assamese"),
+        ("az", "Azerbaijani"),
+        ("ba", "Bashkir"),
+        ("be", "Belarusian"),
+        ("bg", "Bulgarian"),
+        ("bn", "Bengali"),
+        ("bo", "Tibetan"),
+        ("br", "Breton"),
+        ("bs", "Bosnian"),
         ("ca", "Catalan"),
+        ("cs", "Czech"),
+        ("cy", "Welsh"),
+        ("da", "Danish"),
+        ("de", "German"),
+        ("el", "Greek"),
+        ("en", "English"),
+        ("es", "Spanish"),
+        ("et", "Estonian"),
+        ("eu", "Basque"),
+        ("fa", "Persian"),
+        ("fi", "Finnish"),
+        ("fo", "Faroese"),
+        ("fr", "French"),
+        ("gl", "Galician"),
+        ("gu", "Gujarati"),
+        ("ha", "Hausa"),
+        ("haw", "Hawaiian"),
         ("he", "Hebrew"),
+        ("hi", "Hindi"),
+        ("hr", "Croatian"),
+        ("ht", "Haitian Creole"),
+        ("hu", "Hungarian"),
+        ("hy", "Armenian"),
         ("id", "Indonesian"),
+        ("is", "Icelandic"),
+        ("it", "Italian"),
+        ("ja", "Japanese"),
+        ("jw", "Javanese"),
+        ("ka", "Georgian"),
+        ("kk", "Kazakh"),
+        ("km", "Khmer"),
+        ("kn", "Kannada"),
+        ("ko", "Korean"),
+        ("la", "Latin"),
+        ("lb", "Luxembourgish"),
+        ("ln", "Lingala"),
+        ("lo", "Lao"),
+        ("lt", "Lithuanian"),
+        ("lv", "Latvian"),
+        ("mg", "Malagasy"),
+        ("mi", "Maori"),
+        ("mk", "Macedonian"),
+        ("ml", "Malayalam"),
+        ("mn", "Mongolian"),
+        ("mr", "Marathi"),
         ("ms", "Malay"),
+        ("mt", "Maltese"),
+        ("my", "Myanmar"),
+        ("ne", "Nepali"),
+        ("nl", "Dutch"),
+        ("nn", "Nynorsk"),
+        ("no", "Norwegian"),
+        ("oc", "Occitan"),
+        ("pa", "Punjabi"),
+        ("pl", "Polish"),
+        ("ps", "Pashto"),
+        ("pt", "Portuguese"),
+        ("ro", "Romanian"),
+        ("ru", "Russian"),
+        ("sa", "Sanskrit"),
+        ("sd", "Sindhi"),
+        ("si", "Sinhala"),
+        ("sk", "Slovak"),
+        ("sl", "Slovenian"),
+        ("sn", "Shona"),
+        ("so", "Somali"),
+        ("sq", "Albanian"),
+        ("sr", "Serbian"),
+        ("su", "Sundanese"),
+        ("sv", "Swedish"),
+        ("sw", "Swahili"),
+        ("ta", "Tamil"),
+        ("te", "Telugu"),
+        ("tg", "Tajik"),
         ("th", "Thai"),
+        ("tk", "Turkmen"),
+        ("tl", "Tagalog"),
+        ("tr", "Turkish"),
+        ("tt", "Tatar"),
+        ("uk", "Ukrainian"),
+        ("ur", "Urdu"),
+        ("uz", "Uzbek"),
         ("vi", "Vietnamese"),
+        ("yi", "Yiddish"),
+        ("yo", "Yoruba"),
+        ("yue", "Cantonese"),
+        ("zh", "Chinese"),
     ]
 
     func show() {
@@ -50,7 +140,7 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
         }
 
         let w = NSWindow(
-            contentRect: NSRect(origin: .zero, size: NSSize(width: 420, height: 560)),
+            contentRect: NSRect(origin: .zero, size: NSSize(width: 420, height: 650)),
             styleMask: [.titled, .closable],
             backing: .buffered, defer: false
         )
@@ -137,6 +227,66 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
         ])
         y += 36
 
+        // ── Recording ──
+
+        let recordingLabel = Styles.label("Recording", font: Styles.headlineFont)
+        recordingLabel.translatesAutoresizingMaskIntoConstraints = false
+        outer.addSubview(recordingLabel)
+        NSLayoutConstraint.activate([
+            recordingLabel.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
+            recordingLabel.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
+        ])
+        y += 28
+
+        let silenceLabel = Styles.label("Auto-stop after silence:", font: Styles.bodyFont)
+        silenceLabel.translatesAutoresizingMaskIntoConstraints = false
+        outer.addSubview(silenceLabel)
+
+        let silenceOptions: [(title: String, seconds: TimeInterval)] = [
+            ("30 seconds", 30),
+            ("1 minute", 60),
+            ("2 minutes", 120),
+            ("5 minutes", 300),
+            ("10 minutes", 600),
+            ("Never", 0),
+        ]
+
+        let silencePicker = NSPopUpButton(frame: .zero, pullsDown: false)
+        for opt in silenceOptions {
+            silencePicker.addItem(withTitle: opt.title)
+            silencePicker.lastItem?.representedObject = opt.seconds as NSNumber
+        }
+        let savedTimeout = UserDefaults.standard.object(forKey: "silenceTimeout") as? TimeInterval ?? 300
+        if let match = silenceOptions.firstIndex(where: { $0.seconds == savedTimeout }) {
+            silencePicker.selectItem(at: match)
+        }
+        silencePicker.target = self
+        silencePicker.action = #selector(silenceTimeoutChanged(_:))
+        silencePicker.translatesAutoresizingMaskIntoConstraints = false
+        outer.addSubview(silencePicker)
+
+        NSLayoutConstraint.activate([
+            silenceLabel.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
+            silenceLabel.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
+
+            silencePicker.centerYAnchor.constraint(equalTo: silenceLabel.centerYAnchor),
+            silencePicker.leadingAnchor.constraint(equalTo: silenceLabel.trailingAnchor, constant: 8),
+        ])
+        y += 28
+
+        let silenceNote = Styles.label(
+            "Recording auto-stops after this duration of silence. \"Never\" disables auto-stop.",
+            font: Styles.captionFont, color: Styles.tertiaryLabel
+        )
+        silenceNote.translatesAutoresizingMaskIntoConstraints = false
+        outer.addSubview(silenceNote)
+        NSLayoutConstraint.activate([
+            silenceNote.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
+            silenceNote.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
+            silenceNote.trailingAnchor.constraint(equalTo: outer.trailingAnchor, constant: -pad),
+        ])
+        y += 36
+
         // ── Language ──
 
         let langLabel = Styles.label("Language", font: Styles.headlineFont)
@@ -149,13 +299,29 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
         y += 28
 
         let langPicker = NSPopUpButton(frame: .zero, pullsDown: false)
-        for lang in languages {
+
+        // Popular languages first
+        for lang in popularLanguages {
             langPicker.addItem(withTitle: lang.name)
             langPicker.lastItem?.representedObject = lang.code
         }
+
+        // Separator then all languages
+        langPicker.menu?.addItem(.separator())
+        for lang in allLanguages {
+            // Skip if already in popular list to avoid duplicates
+            if popularLanguages.contains(where: { $0.code == lang.code }) { continue }
+            langPicker.addItem(withTitle: lang.name)
+            langPicker.lastItem?.representedObject = lang.code
+        }
+
         let savedLang = UserDefaults.standard.string(forKey: "whisperLanguage") ?? "en"
-        if let match = languages.firstIndex(where: { $0.code == savedLang }) {
-            langPicker.selectItem(at: match)
+        // Find and select the saved language
+        for i in 0..<langPicker.numberOfItems {
+            if let code = langPicker.item(at: i)?.representedObject as? String, code == savedLang {
+                langPicker.selectItem(at: i)
+                break
+            }
         }
         langPicker.target = self
         langPicker.action = #selector(languageChanged(_:))
@@ -164,12 +330,12 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
         NSLayoutConstraint.activate([
             langPicker.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
             langPicker.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-            langPicker.widthAnchor.constraint(equalToConstant: 180),
+            langPicker.widthAnchor.constraint(equalToConstant: 200),
         ])
         y += 28
 
         let langNote = Styles.label(
-            "Setting a language explicitly improves accuracy. Whisper supports 90+ languages.",
+            "Popular languages are listed first. All 99 Whisper-supported languages are available below the separator.",
             font: Styles.captionFont, color: Styles.tertiaryLabel
         )
         langNote.translatesAutoresizingMaskIntoConstraints = false
@@ -193,7 +359,7 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
         y += 28
 
         let modelPicker = NSPopUpButton(frame: .zero, pullsDown: false)
-        modelPicker.addItems(withTitles: ["base", "small", "medium"])
+        modelPicker.addItems(withTitles: ["base", "small", "medium", "large"])
         let savedModel = UserDefaults.standard.string(forKey: "whisperModel") ?? "small"
         modelPicker.selectItem(withTitle: savedModel)
         modelPicker.target = self
@@ -234,7 +400,7 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
         y += 20
 
         let modelNote = Styles.label(
-            "Larger models are more accurate but use more memory and are slower. The \"small\" model is recommended.",
+            "Larger models are more accurate but use more memory and are slower. The \"small\" model is recommended for most users.",
             font: Styles.captionFont, color: Styles.tertiaryLabel
         )
         modelNote.translatesAutoresizingMaskIntoConstraints = false
@@ -313,6 +479,12 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
 
     @objc private func toggleClipboard(_ sender: NSButton) {
         UserDefaults.standard.set(sender.state == .on, forKey: "keepOnClipboard")
+    }
+
+    @objc private func silenceTimeoutChanged(_ sender: NSPopUpButton) {
+        if let seconds = sender.selectedItem?.representedObject as? NSNumber {
+            UserDefaults.standard.set(seconds.doubleValue, forKey: "silenceTimeout")
+        }
     }
 
     @objc private func languageChanged(_ sender: NSPopUpButton) {

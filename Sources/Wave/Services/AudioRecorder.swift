@@ -9,11 +9,17 @@ class AudioRecorder {
     private var audioBuffer: [Float] = []
     private var isRecording = false
 
-    // Silence detection: auto-stop after 5 minutes of silence
+    // Silence detection: auto-stop after a configurable period of silence
     private var silenceTimer: Timer?
     private let silenceThreshold: Float = 0.01  // RMS below this = silence
-    private let silenceTimeout: TimeInterval = 300  // 5 minutes
     private var lastSpeechTime: Date = Date()
+
+    /// Silence timeout in seconds. 0 means never auto-stop.
+    /// Read from UserDefaults ("silenceTimeout"), defaults to 300 (5 minutes).
+    private var silenceTimeout: TimeInterval {
+        let stored = UserDefaults.standard.object(forKey: "silenceTimeout")
+        return (stored as? TimeInterval) ?? 300
+    }
 
     /// Called when silence auto-stop triggers. Set by AppDelegate.
     var onSilenceAutoStop: (() -> Void)?
@@ -76,14 +82,18 @@ class AudioRecorder {
         try engine.start()
         isRecording = true
 
-        // Start silence monitoring timer
-        silenceTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
-            guard let self = self, self.isRecording else { return }
-            let silenceDuration = Date().timeIntervalSince(self.lastSpeechTime)
-            if silenceDuration >= self.silenceTimeout {
-                NSLog("Wave: Auto-stopping after 5 minutes of silence")
-                DispatchQueue.main.async {
-                    self.onSilenceAutoStop?()
+        // Start silence monitoring timer (disabled when timeout is 0 / "Never")
+        let timeout = silenceTimeout
+        if timeout > 0 {
+            silenceTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+                guard let self = self, self.isRecording else { return }
+                let silenceDuration = Date().timeIntervalSince(self.lastSpeechTime)
+                if silenceDuration >= timeout {
+                    let minutes = Int(timeout) / 60
+                    NSLog("Wave: Auto-stopping after \(minutes) minute\(minutes == 1 ? "" : "s") of silence")
+                    DispatchQueue.main.async {
+                        self.onSilenceAutoStop?()
+                    }
                 }
             }
         }
