@@ -156,11 +156,8 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
         let box = NSView()
 
         let icon = NSImageView()
-        if let img = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Wave") {
-            let config = NSImage.SymbolConfiguration(pointSize: 32, weight: .medium)
-            icon.image = img.withSymbolConfiguration(config)
-            icon.contentTintColor = .controlAccentColor
-        }
+        icon.image = Bundle.module.image(forResource: "app-icon")
+        icon.imageScaling = .scaleProportionallyDown
         icon.translatesAutoresizingMaskIntoConstraints = false
         box.addSubview(icon)
 
@@ -181,6 +178,8 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
         NSLayoutConstraint.activate([
             icon.topAnchor.constraint(equalTo: box.topAnchor, constant: 28),
             icon.centerXAnchor.constraint(equalTo: box.centerXAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 80),
+            icon.heightAnchor.constraint(equalToConstant: 80),
 
             title.topAnchor.constraint(equalTo: icon.bottomAnchor, constant: 12),
             title.leadingAnchor.constraint(equalTo: box.leadingAnchor, constant: hPad),

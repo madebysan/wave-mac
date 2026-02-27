@@ -18,6 +18,9 @@ let package = Package(
                 "KeyboardShortcuts",
             ],
             path: "Sources/Wave",
+            resources: [
+                .process("Resources")
+            ],
             linkerSettings: [
                 .unsafeFlags([
                     "-Xlinker", "-sectcreate",

@@ -2,6 +2,15 @@ import Cocoa
 import UniformTypeIdentifiers
 import WhisperKit
 
+var standardError = FileHandle.standardError
+
+extension FileHandle: @retroactive TextOutputStream {
+    public func write(_ string: String) {
+        let data = Data(string.utf8)
+        self.write(data)
+    }
+}
+
 // App lifecycle manager.
 // Coordinates the Wave pipeline: hotkey → record → transcribe → filter → paste.
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -11,9 +20,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotkeyManager: HotkeyManager!
     let transcriber = Transcriber()
     private var isRecording = false
-
-    // Real-time preview window
-    private var previewController: PreviewWindowController?
 
     // Audio file transcription result window
     private var resultController: TranscriptionResultWindowController?
@@ -75,8 +81,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         if isRecording {
             stopSilenceMonitor()
-            previewController?.hide()
-            // Streaming will be cleaned up when the app exits
         }
     }
 
@@ -112,33 +116,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         guard transcriber.isReady else {
-            showError("Model not ready", detail: "The Whisper model is still downloading. Please wait and try again.")
+            showError("Model not ready", detail: "The Whisper model is still loading. Please wait a moment and try again.")
+            prepareTranscriber()
             return
         }
 
         do {
             isRecording = true
             statusBarController.setState(.recording)
-            SoundFeedback.playStart()
-
-            // Show the real-time preview window
-            if previewController == nil {
-                previewController = PreviewWindowController()
+            if UserDefaults.standard.object(forKey: "playSoundFeedback") == nil || UserDefaults.standard.bool(forKey: "playSoundFeedback") {
+                SoundFeedback.playStart()
             }
-            previewController?.show()
-            previewController?.update(confirmed: "", unconfirmed: "Listening...")
 
             // Start silence monitoring
             startSilenceMonitor()
 
             // Start streaming transcription
+            print("[Wave] starting streaming...", to: &standardError)
             try transcriber.startStreaming { [weak self] update in
                 guard let self = self else { return }
-                // Update preview window with live text
-                self.previewController?.update(
-                    confirmed: update.confirmedText,
-                    unconfirmed: update.unconfirmedText
-                )
+                if !update.confirmedText.isEmpty || !update.unconfirmedText.isEmpty {
+                    print("[Wave] live: confirmed='\(update.confirmedText)' unconfirmed='\(update.unconfirmedText)'", to: &standardError)
+                }
                 // Check for speech activity via buffer energy
                 let maxEnergy = update.bufferEnergy.max() ?? 0
                 if maxEnergy > self.silenceEnergyThreshold {
@@ -148,23 +147,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             isRecording = false
             statusBarController.setState(.idle)
-            previewController?.hide()
             stopSilenceMonitor()
-            NSLog("Wave: Failed to start recording: \(error.localizedDescription)")
+            print("[Wave] failed to start recording: \(error.localizedDescription)", to: &standardError)
             showError("Could not start recording", detail: error.localizedDescription)
         }
     }
 
     private func stopAndTranscribe() {
         guard isRecording else { return }
-        SoundFeedback.playStop()
+        if UserDefaults.standard.object(forKey: "playSoundFeedback") == nil || UserDefaults.standard.bool(forKey: "playSoundFeedback") {
+            SoundFeedback.playStop()
+        }
         isRecording = false
         stopSilenceMonitor()
         statusBarController.setState(.transcribing)
 
         Task {
-            // Stop streaming and get the final text
             var text = await transcriber.stopStreaming()
+            print("[Wave] stopStreaming returned: '\(text)'", to: &standardError)
 
             // Apply filler word removal if enabled
             text = FillerFilter.filter(text)
@@ -172,12 +172,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let finalText = text
 
             await MainActor.run {
-                previewController?.hide()
-
                 guard !finalText.isEmpty else {
+                    print("[Wave] final text empty, skipping paste", to: &standardError)
                     statusBarController.setState(.idle)
                     return
                 }
+                print("[Wave] pasting: '\(finalText)'", to: &standardError)
 
                 // Save to history before injecting
                 TranscriptionHistory.shared.add(finalText)
@@ -256,7 +256,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     resultController?.show(text: finalText, fileName: fileName)
                 }
             } catch {
-                NSLog("Wave: File transcription failed: \(error.localizedDescription)")
+                print("[Wave] file transcription failed: \(error.localizedDescription)", to: &standardError)
                 await MainActor.run {
                     statusBarController.setState(.idle)
                     showError("Transcription failed", detail: error.localizedDescription)
@@ -277,7 +277,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let silenceDuration = Date().timeIntervalSince(self.lastSpeechTime)
             if silenceDuration >= timeout {
                 let minutes = Int(timeout) / 60
-                NSLog("Wave: Auto-stopping after \(minutes) minute\(minutes == 1 ? "" : "s") of silence")
+                print("[Wave] auto-stopping after \(minutes) minute\(minutes == 1 ? "" : "s") of silence", to: &standardError)
                 self.stopAndTranscribe()
             }
         }

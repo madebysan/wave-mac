@@ -139,8 +139,15 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
             return
         }
 
+        let winWidth: CGFloat = 440
+        let winHeight: CGFloat = 700
+        let pad: CGFloat = 24
+        let cardWidth = winWidth - pad * 2
+        let rowH = Styles.cardRowHeight
+        let hPad = Styles.cardHPadding
+
         let w = NSWindow(
-            contentRect: NSRect(origin: .zero, size: NSSize(width: 420, height: 650)),
+            contentRect: NSRect(origin: .zero, size: NSSize(width: winWidth, height: winHeight)),
             styleMask: [.titled, .closable],
             backing: .buffered, defer: false
         )
@@ -150,7 +157,6 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
         w.delegate = self
         window = w
 
-        // Use a scroll view so the window doesn't need to be huge
         let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = false
@@ -160,122 +166,72 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
         outer.translatesAutoresizingMaskIntoConstraints = false
         scrollView.documentView = outer
 
-        let pad: CGFloat = 24
         var y: CGFloat = pad
+
+        // ── Helper: place a view at the current y, advance y ──
+
+        func place(_ view: NSView, height: CGFloat, leading: CGFloat = pad) {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            outer.addSubview(view)
+            NSLayoutConstraint.activate([
+                view.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
+                view.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: leading),
+            ])
+            y += height
+        }
+
+        func placeFullWidth(_ view: NSView, height: CGFloat, leading: CGFloat = pad) {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            outer.addSubview(view)
+            NSLayoutConstraint.activate([
+                view.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
+                view.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: leading),
+                view.trailingAnchor.constraint(equalTo: outer.trailingAnchor, constant: -pad),
+            ])
+            y += height
+        }
+
+        /// Build a card from an array of row views, inserting dividers between them.
+        func buildCard(rows: [NSView]) -> NSView {
+            let card = Styles.makeCard(width: cardWidth)
+            var cardY: CGFloat = 0
+            for (i, row) in rows.enumerated() {
+                row.frame.origin = NSPoint(x: 0, y: cardY)
+                card.addSubview(row)
+                cardY += row.frame.height
+                if i < rows.count - 1 {
+                    let div = Styles.makeDivider(width: cardWidth)
+                    div.frame.origin = NSPoint(x: 0, y: cardY)
+                    card.addSubview(div)
+                    cardY += 1
+                }
+            }
+            card.frame.size.height = cardY
+            return card
+        }
 
         // ── Keyboard Shortcut ──
 
-        let shortcutLabel = Styles.label("Keyboard Shortcut", font: Styles.headlineFont)
-        shortcutLabel.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(shortcutLabel)
-        NSLayoutConstraint.activate([
-            shortcutLabel.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            shortcutLabel.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-        ])
-        y += 24
-
-        let shortcutDetail = Styles.label(
-            "The global shortcut that activates Wave from any app.",
-            font: Styles.captionFont, color: Styles.secondaryLabel
-        )
-        shortcutDetail.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(shortcutDetail)
-        NSLayoutConstraint.activate([
-            shortcutDetail.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            shortcutDetail.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-            shortcutDetail.trailingAnchor.constraint(equalTo: outer.trailingAnchor, constant: -pad),
-        ])
-        y += 24
+        let shortcutTitle = Styles.sectionTitle("Keyboard Shortcut")
+        place(shortcutTitle, height: 16 + Styles.titleToCardGap)
 
         let recorder = KeyboardShortcuts.RecorderCocoa(for: .toggleDictation)
-        recorder.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(recorder)
-        NSLayoutConstraint.activate([
-            recorder.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            recorder.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-        ])
-        y += 44
-
-        // ── Recording Mode ──
-
-        let modeLabel = Styles.label("Recording Mode", font: Styles.headlineFont)
-        modeLabel.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(modeLabel)
-        NSLayoutConstraint.activate([
-            modeLabel.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            modeLabel.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-        ])
-        y += 28
-
-        let modeControl = NSSegmentedControl(labels: ["Toggle", "Push-to-talk"], trackingMode: .selectOne, target: self, action: #selector(recordingModeChanged(_:)))
-        modeControl.selectedSegment = RecordingMode.current == .pushToTalk ? 1 : 0
-        modeControl.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(modeControl)
-        NSLayoutConstraint.activate([
-            modeControl.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            modeControl.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-        ])
-        y += 28
-
-        let modeNote = Styles.label(
-            "Toggle: press shortcut to start, press again to stop. Push-to-talk: hold shortcut to record, release to transcribe.",
-            font: Styles.captionFont, color: Styles.tertiaryLabel
-        )
-        modeNote.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(modeNote)
-        NSLayoutConstraint.activate([
-            modeNote.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            modeNote.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-            modeNote.trailingAnchor.constraint(equalTo: outer.trailingAnchor, constant: -pad),
-        ])
-        y += 36
-
-        // ── Post-processing ──
-
-        let fillerLabel = Styles.label("Post-processing", font: Styles.headlineFont)
-        fillerLabel.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(fillerLabel)
-        NSLayoutConstraint.activate([
-            fillerLabel.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            fillerLabel.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-        ])
-        y += 28
-
-        let fillerToggle = NSButton(checkboxWithTitle: "Remove filler words and stutters", target: self, action: #selector(toggleFiller(_:)))
-        fillerToggle.state = UserDefaults.standard.object(forKey: "removeFillers") == nil ? .on : (UserDefaults.standard.bool(forKey: "removeFillers") ? .on : .off)
-        fillerToggle.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(fillerToggle)
-        NSLayoutConstraint.activate([
-            fillerToggle.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            fillerToggle.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-        ])
-        y += 24
-
-        let clipboardToggle = NSButton(checkboxWithTitle: "Keep transcribed text on clipboard", target: self, action: #selector(toggleClipboard(_:)))
-        clipboardToggle.state = UserDefaults.standard.bool(forKey: "keepOnClipboard") ? .on : .off
-        clipboardToggle.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(clipboardToggle)
-        NSLayoutConstraint.activate([
-            clipboardToggle.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            clipboardToggle.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-        ])
-        y += 36
+        let shortcutRow = Styles.makeRow(label: "Shortcut", control: recorder, width: cardWidth)
+        let shortcutCard = buildCard(rows: [shortcutRow])
+        place(shortcutCard, height: shortcutCard.frame.height)
+        y += Styles.sectionGap
 
         // ── Recording ──
 
-        let recordingLabel = Styles.label("Recording", font: Styles.headlineFont)
-        recordingLabel.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(recordingLabel)
-        NSLayoutConstraint.activate([
-            recordingLabel.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            recordingLabel.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-        ])
-        y += 28
+        let recordingTitle = Styles.sectionTitle("Recording")
+        place(recordingTitle, height: 16 + Styles.titleToCardGap)
 
-        let silenceLabel = Styles.label("Auto-stop after silence:", font: Styles.bodyFont)
-        silenceLabel.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(silenceLabel)
+        // Mode row
+        let modeControl = NSSegmentedControl(labels: ["Toggle", "Push-to-talk"], trackingMode: .selectOne, target: self, action: #selector(recordingModeChanged(_:)))
+        modeControl.selectedSegment = RecordingMode.current == .pushToTalk ? 1 : 0
+        let modeRow = Styles.makeRow(label: "Mode", control: modeControl, width: cardWidth)
 
+        // Auto-stop row
         let silenceOptions: [(title: String, seconds: TimeInterval)] = [
             ("30 seconds", 30),
             ("1 minute", 60),
@@ -284,7 +240,6 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
             ("10 minutes", 600),
             ("Never", 0),
         ]
-
         let silencePicker = NSPopUpButton(frame: .zero, pullsDown: false)
         for opt in silenceOptions {
             silencePicker.addItem(withTitle: opt.title)
@@ -296,66 +251,69 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
         }
         silencePicker.target = self
         silencePicker.action = #selector(silenceTimeoutChanged(_:))
-        silencePicker.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(silencePicker)
+        let silenceRow = Styles.makeRow(label: "Auto-stop", control: silencePicker, width: cardWidth)
 
-        NSLayoutConstraint.activate([
-            silenceLabel.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            silenceLabel.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
+        let recordingCard = buildCard(rows: [modeRow, silenceRow])
+        place(recordingCard, height: recordingCard.frame.height)
+        y += Styles.descBelowCardGap
 
-            silencePicker.centerYAnchor.constraint(equalTo: silenceLabel.centerYAnchor),
-            silencePicker.leadingAnchor.constraint(equalTo: silenceLabel.trailingAnchor, constant: 8),
-        ])
-        y += 28
-
-        let silenceNote = Styles.label(
-            "Recording auto-stops after this duration of silence. \"Never\" disables auto-stop.",
-            font: Styles.captionFont, color: Styles.tertiaryLabel
+        let recordingDesc = Styles.makeDescription(
+            "Toggle: press shortcut to start, press again to stop. Push-to-talk: hold to record, release to transcribe. Auto-stop triggers after the chosen duration of silence.",
+            width: cardWidth
         )
-        silenceNote.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(silenceNote)
+        placeFullWidth(recordingDesc, height: 44, leading: pad)
+        y += Styles.sectionGap
+
+        // ── Post-processing ──
+
+        let postTitle = Styles.sectionTitle("Post-processing")
+        place(postTitle, height: 16 + Styles.titleToCardGap)
+
+        // Checkbox rows — checkboxes span the full row, no separate label/control split
+        let fillerToggle = NSButton(checkboxWithTitle: "Remove filler words and stutters", target: self, action: #selector(toggleFiller(_:)))
+        fillerToggle.state = UserDefaults.standard.object(forKey: "removeFillers") == nil ? .on : (UserDefaults.standard.bool(forKey: "removeFillers") ? .on : .off)
+        let fillerRow = FlippedView(frame: NSRect(x: 0, y: 0, width: cardWidth, height: rowH))
+        fillerToggle.translatesAutoresizingMaskIntoConstraints = false
+        fillerRow.addSubview(fillerToggle)
         NSLayoutConstraint.activate([
-            silenceNote.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            silenceNote.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-            silenceNote.trailingAnchor.constraint(equalTo: outer.trailingAnchor, constant: -pad),
+            fillerToggle.leadingAnchor.constraint(equalTo: fillerRow.leadingAnchor, constant: hPad),
+            fillerToggle.centerYAnchor.constraint(equalTo: fillerRow.centerYAnchor),
         ])
-        y += 36
+
+        let clipboardToggle = NSButton(checkboxWithTitle: "Keep transcribed text on clipboard", target: self, action: #selector(toggleClipboard(_:)))
+        clipboardToggle.state = UserDefaults.standard.bool(forKey: "keepOnClipboard") ? .on : .off
+        let clipboardRow = FlippedView(frame: NSRect(x: 0, y: 0, width: cardWidth, height: rowH))
+        clipboardToggle.translatesAutoresizingMaskIntoConstraints = false
+        clipboardRow.addSubview(clipboardToggle)
+        NSLayoutConstraint.activate([
+            clipboardToggle.leadingAnchor.constraint(equalTo: clipboardRow.leadingAnchor, constant: hPad),
+            clipboardToggle.centerYAnchor.constraint(equalTo: clipboardRow.centerYAnchor),
+        ])
+
+        let postCard = buildCard(rows: [fillerRow, clipboardRow])
+        place(postCard, height: postCard.frame.height)
+        y += Styles.sectionGap
 
         // ── Language ──
 
-        let langLabel = Styles.label("Language", font: Styles.headlineFont)
-        langLabel.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(langLabel)
-        NSLayoutConstraint.activate([
-            langLabel.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            langLabel.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-        ])
-        y += 28
+        let langTitle = Styles.sectionTitle("Language")
+        place(langTitle, height: 16 + Styles.titleToCardGap)
 
         let langPicker = NSPopUpButton(frame: .zero, pullsDown: false)
-
-        // Auto-detect first
         langPicker.addItem(withTitle: "Auto-detect")
         langPicker.lastItem?.representedObject = "auto"
-
-        // Separator then popular languages
         langPicker.menu?.addItem(.separator())
         for lang in popularLanguages {
             langPicker.addItem(withTitle: lang.name)
             langPicker.lastItem?.representedObject = lang.code
         }
-
-        // Separator then all languages
         langPicker.menu?.addItem(.separator())
         for lang in allLanguages {
-            // Skip if already in popular list to avoid duplicates
             if popularLanguages.contains(where: { $0.code == lang.code }) { continue }
             langPicker.addItem(withTitle: lang.name)
             langPicker.lastItem?.representedObject = lang.code
         }
-
         let savedLang = UserDefaults.standard.string(forKey: "whisperLanguage") ?? "en"
-        // Find and select the saved language
         for i in 0..<langPicker.numberOfItems {
             if let code = langPicker.item(at: i)?.representedObject as? String, code == savedLang {
                 langPicker.selectItem(at: i)
@@ -364,38 +322,23 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
         }
         langPicker.target = self
         langPicker.action = #selector(languageChanged(_:))
-        langPicker.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(langPicker)
-        NSLayoutConstraint.activate([
-            langPicker.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            langPicker.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-            langPicker.widthAnchor.constraint(equalToConstant: 200),
-        ])
-        y += 28
+        let langRow = Styles.makeRow(label: "Language", control: langPicker, width: cardWidth)
 
-        let langNote = Styles.label(
-            "\"Auto-detect\" lets Whisper identify the spoken language automatically. Popular languages are listed first, with all 99 supported languages below.",
-            font: Styles.captionFont, color: Styles.tertiaryLabel
+        let langCard = buildCard(rows: [langRow])
+        place(langCard, height: langCard.frame.height)
+        y += Styles.descBelowCardGap
+
+        let langDesc = Styles.makeDescription(
+            "\"Auto-detect\" lets Whisper identify the spoken language. Popular languages are listed first.",
+            width: cardWidth
         )
-        langNote.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(langNote)
-        NSLayoutConstraint.activate([
-            langNote.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            langNote.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-            langNote.trailingAnchor.constraint(equalTo: outer.trailingAnchor, constant: -pad),
-        ])
-        y += 36
+        placeFullWidth(langDesc, height: 32, leading: pad)
+        y += Styles.sectionGap
 
         // ── Whisper Model ──
 
-        let modelLabel = Styles.label("Whisper Model", font: Styles.headlineFont)
-        modelLabel.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(modelLabel)
-        NSLayoutConstraint.activate([
-            modelLabel.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            modelLabel.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-        ])
-        y += 28
+        let whisperTitle = Styles.sectionTitle("Whisper Model")
+        place(whisperTitle, height: 16 + Styles.titleToCardGap)
 
         let modelPicker = NSPopUpButton(frame: .zero, pullsDown: false)
         modelPicker.addItems(withTitles: ["base", "small", "medium", "large"])
@@ -403,53 +346,47 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
         modelPicker.selectItem(withTitle: savedModel)
         modelPicker.target = self
         modelPicker.action = #selector(modelChanged(_:))
-        modelPicker.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(modelPicker)
 
-        // Spinner for download progress
+        // Model control area: picker + spinner + status in a horizontal stack
+        let modelControlStack = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 24))
+
         let spinner = NSProgressIndicator()
         spinner.style = .spinning
         spinner.controlSize = .small
         spinner.isIndeterminate = true
-        spinner.translatesAutoresizingMaskIntoConstraints = false
         spinner.isHidden = true
-        outer.addSubview(spinner)
         modelSpinner = spinner
 
-        NSLayoutConstraint.activate([
-            modelPicker.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            modelPicker.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-            modelPicker.widthAnchor.constraint(equalToConstant: 140),
-
-            spinner.centerYAnchor.constraint(equalTo: modelPicker.centerYAnchor),
-            spinner.leadingAnchor.constraint(equalTo: modelPicker.trailingAnchor, constant: 8),
-        ])
-        y += 28
-
-        // Model status label (shows "Downloaded", "Downloading...", etc.)
         let statusLabel = Styles.label("", font: Styles.captionFont, color: .systemGreen)
-        statusLabel.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(statusLabel)
         modelStatusLabel = statusLabel
-        NSLayoutConstraint.activate([
-            statusLabel.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            statusLabel.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-            statusLabel.trailingAnchor.constraint(equalTo: outer.trailingAnchor, constant: -pad),
-        ])
-        y += 20
 
-        let modelNote = Styles.label(
-            "Larger models are more accurate but use more memory and are slower. The \"small\" model is recommended for most users.",
-            font: Styles.captionFont, color: Styles.tertiaryLabel
-        )
-        modelNote.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(modelNote)
+        modelPicker.translatesAutoresizingMaskIntoConstraints = false
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+        modelControlStack.addSubview(modelPicker)
+        modelControlStack.addSubview(spinner)
+        modelControlStack.addSubview(statusLabel)
+
         NSLayoutConstraint.activate([
-            modelNote.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            modelNote.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-            modelNote.trailingAnchor.constraint(equalTo: outer.trailingAnchor, constant: -pad),
+            modelPicker.leadingAnchor.constraint(equalTo: modelControlStack.leadingAnchor),
+            modelPicker.centerYAnchor.constraint(equalTo: modelControlStack.centerYAnchor),
+            spinner.leadingAnchor.constraint(equalTo: modelPicker.trailingAnchor, constant: 6),
+            spinner.centerYAnchor.constraint(equalTo: modelControlStack.centerYAnchor),
+            statusLabel.leadingAnchor.constraint(equalTo: spinner.trailingAnchor, constant: 6),
+            statusLabel.centerYAnchor.constraint(equalTo: modelControlStack.centerYAnchor),
+            modelControlStack.trailingAnchor.constraint(greaterThanOrEqualTo: statusLabel.trailingAnchor),
         ])
-        y += 36
+
+        let modelRow = Styles.makeRow(label: "Model", control: modelControlStack, width: cardWidth)
+        let modelCard = buildCard(rows: [modelRow])
+        place(modelCard, height: modelCard.frame.height)
+        y += Styles.descBelowCardGap
+
+        let modelDesc = Styles.makeDescription(
+            "Larger models are more accurate but use more memory and are slower. \"small\" is recommended.",
+            width: cardWidth
+        )
+        placeFullWidth(modelDesc, height: 32, leading: pad)
 
         // Observe transcriber state changes to update the status label
         stateObserver = NotificationCenter.default.addObserver(
@@ -459,52 +396,56 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
         }
         updateModelStatus()
 
+        y += Styles.sectionGap
+
         // ── General ──
 
-        let generalLabel = Styles.label("General", font: Styles.headlineFont)
-        generalLabel.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(generalLabel)
+        let generalTitle = Styles.sectionTitle("General")
+        place(generalTitle, height: 16 + Styles.titleToCardGap)
+
+        let soundToggle = NSButton(checkboxWithTitle: "Play sound feedback", target: self, action: #selector(toggleSoundFeedback(_:)))
+        soundToggle.state = UserDefaults.standard.object(forKey: "playSoundFeedback") == nil ? .on : (UserDefaults.standard.bool(forKey: "playSoundFeedback") ? .on : .off)
+        let soundRow = FlippedView(frame: NSRect(x: 0, y: 0, width: cardWidth, height: rowH))
+        soundToggle.translatesAutoresizingMaskIntoConstraints = false
+        soundRow.addSubview(soundToggle)
         NSLayoutConstraint.activate([
-            generalLabel.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            generalLabel.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
+            soundToggle.leadingAnchor.constraint(equalTo: soundRow.leadingAnchor, constant: hPad),
+            soundToggle.centerYAnchor.constraint(equalTo: soundRow.centerYAnchor),
         ])
-        y += 28
 
         let historyToggle = NSButton(checkboxWithTitle: "Save transcription history", target: self, action: #selector(toggleHistory(_:)))
         historyToggle.state = TranscriptionHistory.isEnabled ? .on : .off
+        let historyRow = FlippedView(frame: NSRect(x: 0, y: 0, width: cardWidth, height: rowH))
         historyToggle.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(historyToggle)
+        historyRow.addSubview(historyToggle)
         NSLayoutConstraint.activate([
-            historyToggle.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            historyToggle.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
+            historyToggle.leadingAnchor.constraint(equalTo: historyRow.leadingAnchor, constant: hPad),
+            historyToggle.centerYAnchor.constraint(equalTo: historyRow.centerYAnchor),
         ])
-        y += 20
-
-        let historyNote = Styles.label(
-            "Only transcribed text is saved. Audio recordings are never stored.",
-            font: Styles.captionFont, color: Styles.tertiaryLabel
-        )
-        historyNote.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(historyNote)
-        NSLayoutConstraint.activate([
-            historyNote.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            historyNote.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
-            historyNote.trailingAnchor.constraint(equalTo: outer.trailingAnchor, constant: -pad),
-        ])
-        y += 24
 
         let loginToggle = NSButton(checkboxWithTitle: "Launch at login", target: self, action: #selector(toggleLaunchAtLogin(_:)))
         loginToggle.state = UserDefaults.standard.bool(forKey: "launchAtLogin") ? .on : .off
+        let loginRow = FlippedView(frame: NSRect(x: 0, y: 0, width: cardWidth, height: rowH))
         loginToggle.translatesAutoresizingMaskIntoConstraints = false
-        outer.addSubview(loginToggle)
+        loginRow.addSubview(loginToggle)
         NSLayoutConstraint.activate([
-            loginToggle.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
-            loginToggle.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
+            loginToggle.leadingAnchor.constraint(equalTo: loginRow.leadingAnchor, constant: hPad),
+            loginToggle.centerYAnchor.constraint(equalTo: loginRow.centerYAnchor),
         ])
+
+        let generalCard = buildCard(rows: [soundRow, historyRow, loginRow])
+        place(generalCard, height: generalCard.frame.height)
+        y += Styles.descBelowCardGap
+
+        let generalDesc = Styles.makeDescription(
+            "Audio cues play when recording starts and stops. Only transcribed text is saved — audio is never stored.",
+            width: cardWidth
+        )
+        placeFullWidth(generalDesc, height: 32, leading: pad)
         y += pad
 
         // Set the document view size so scrolling works
-        outer.frame = NSRect(x: 0, y: 0, width: 420, height: y)
+        outer.frame = NSRect(x: 0, y: 0, width: winWidth, height: y)
 
         w.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -570,6 +511,10 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
             modelSpinner?.isHidden = true
             modelSpinner?.stopAnimation(nil)
         }
+    }
+
+    @objc private func toggleSoundFeedback(_ sender: NSButton) {
+        UserDefaults.standard.set(sender.state == .on, forKey: "playSoundFeedback")
     }
 
     @objc private func toggleHistory(_ sender: NSButton) {

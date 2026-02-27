@@ -53,15 +53,16 @@ class Transcriber {
         do {
             let config = WhisperKitConfig(
                 model: "openai_whisper-\(model)",
-                computeOptions: ModelComputeOptions(audioEncoderCompute: .cpuAndNeuralEngine, textDecoderCompute: .cpuAndNeuralEngine)
+                computeOptions: ModelComputeOptions(audioEncoderCompute: .cpuAndNeuralEngine, textDecoderCompute: .cpuAndNeuralEngine),
+                load: true
             )
             whisperKit = try await WhisperKit(config)
             currentModelName = model
             state = .ready(model: model)
-            NSLog("Wave: Whisper model '\(model)' ready")
+            print("[Wave] model '\(model)' ready, tokenizer=\(whisperKit?.tokenizer != nil ? "set" : "nil")", to: &standardError)
         } catch {
             state = .failed(message: error.localizedDescription)
-            NSLog("Wave: Failed to prepare model '\(model)': \(error.localizedDescription)")
+            print("[Wave] failed to prepare model '\(model)': \(error.localizedDescription)", to: &standardError)
             throw error
         }
     }
@@ -80,21 +81,12 @@ class Transcriber {
 
         let results = try await whisperKit.transcribe(audioArray: audioSamples, decodeOptions: decodeOptions)
 
-        // Combine segment texts, filtering out WhisperKit artifacts
-        let artifactPatterns = ["[BLANK_AUDIO]", "[NO_SPEECH]", "(blank audio)", "(no speech)"]
         let text = results
             .map { $0.text }
             .joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Strip artifacts
-        var cleaned = text
-        for artifact in artifactPatterns {
-            cleaned = cleaned.replacingOccurrences(of: artifact, with: "", options: .caseInsensitive)
-        }
-        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        return cleaned
+        return stripTokensAndArtifacts(text)
     }
 
     // MARK: - Streaming transcription
@@ -161,7 +153,7 @@ class Transcriber {
             do {
                 try await transcriber.startStreamTranscription()
             } catch {
-                NSLog("Wave: Streaming transcription error: \(error.localizedDescription)")
+                print("[Wave] streaming error: \(error.localizedDescription)", to: &standardError)
             }
             // Clean up references when loop ends
             let weakSelf = self
@@ -188,18 +180,23 @@ class Transcriber {
             .joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Strip artifacts
-        let artifactPatterns = ["[BLANK_AUDIO]", "[NO_SPEECH]", "(blank audio)", "(no speech)"]
-        var cleaned = finalText
-        for artifact in artifactPatterns {
-            cleaned = cleaned.replacingOccurrences(of: artifact, with: "", options: .caseInsensitive)
-        }
-        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
-
         latestConfirmedText = ""
         latestUnconfirmedText = ""
 
-        return cleaned
+        return stripTokensAndArtifacts(finalText)
+    }
+
+    /// Strip WhisperKit special tokens and common artifacts from transcription text.
+    private func stripTokensAndArtifacts(_ text: String) -> String {
+        var cleaned = text
+        // Strip <|...|> special tokens
+        cleaned = cleaned.replacingOccurrences(of: "<\\|[^|]+\\|>", with: "", options: .regularExpression)
+        // Strip common artifacts
+        let artifacts = ["[BLANK_AUDIO]", "[NO_SPEECH]", "(blank audio)", "(no speech)"]
+        for artifact in artifacts {
+            cleaned = cleaned.replacingOccurrences(of: artifact, with: "", options: .caseInsensitive)
+        }
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     enum TranscriberError: Error, LocalizedError {
