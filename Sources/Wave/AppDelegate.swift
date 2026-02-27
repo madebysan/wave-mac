@@ -121,49 +121,59 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        do {
-            isRecording = true
-            statusBarController.setState(.recording)
-            if UserDefaults.standard.object(forKey: "playSoundFeedback") == nil || UserDefaults.standard.bool(forKey: "playSoundFeedback") {
-                SoundFeedback.playStart()
-            }
+        isRecording = true
+        statusBarController.setState(.recording)
 
-            // Start silence monitoring
-            startSilenceMonitor()
+        let shouldPlaySound = UserDefaults.standard.object(forKey: "playSoundFeedback") == nil || UserDefaults.standard.bool(forKey: "playSoundFeedback")
 
-            // Start streaming transcription
-            print("[Wave] starting streaming...", to: &standardError)
-            try transcriber.startStreaming { [weak self] update in
-                guard let self = self else { return }
-                if !update.confirmedText.isEmpty || !update.unconfirmedText.isEmpty {
-                    print("[Wave] live: confirmed='\(update.confirmedText)' unconfirmed='\(update.unconfirmedText)'", to: &standardError)
+        let beginStreaming = { [weak self] in
+            guard let self = self else { return }
+            do {
+                // Start silence monitoring
+                self.startSilenceMonitor()
+
+                // Start streaming transcription
+                print("[Wave] starting streaming...", to: &standardError)
+                try self.transcriber.startStreaming { [weak self] update in
+                    guard let self = self else { return }
+                    if !update.confirmedText.isEmpty || !update.unconfirmedText.isEmpty {
+                        print("[Wave] live: confirmed='\(update.confirmedText)' unconfirmed='\(update.unconfirmedText)'", to: &standardError)
+                    }
+                    let maxEnergy = update.bufferEnergy.max() ?? 0
+                    if maxEnergy > self.silenceEnergyThreshold {
+                        self.lastSpeechTime = Date()
+                    }
                 }
-                // Check for speech activity via buffer energy
-                let maxEnergy = update.bufferEnergy.max() ?? 0
-                if maxEnergy > self.silenceEnergyThreshold {
-                    self.lastSpeechTime = Date()
-                }
+            } catch {
+                self.isRecording = false
+                self.statusBarController.setState(.idle)
+                self.stopSilenceMonitor()
+                print("[Wave] failed to start recording: \(error.localizedDescription)", to: &standardError)
+                self.showError("Could not start recording", detail: error.localizedDescription)
             }
-        } catch {
-            isRecording = false
-            statusBarController.setState(.idle)
-            stopSilenceMonitor()
-            print("[Wave] failed to start recording: \(error.localizedDescription)", to: &standardError)
-            showError("Could not start recording", detail: error.localizedDescription)
+        }
+
+        if shouldPlaySound {
+            // Play sound first, start recording after sound finishes
+            SoundFeedback.playStart(completion: beginStreaming)
+        } else {
+            beginStreaming()
         }
     }
 
     private func stopAndTranscribe() {
         guard isRecording else { return }
-        if UserDefaults.standard.object(forKey: "playSoundFeedback") == nil || UserDefaults.standard.bool(forKey: "playSoundFeedback") {
-            SoundFeedback.playStop()
-        }
         isRecording = false
         stopSilenceMonitor()
         statusBarController.setState(.transcribing)
 
         Task {
             var text = await transcriber.stopStreaming()
+
+            // Play stop sound after the audio engine has stopped
+            if UserDefaults.standard.object(forKey: "playSoundFeedback") == nil || UserDefaults.standard.bool(forKey: "playSoundFeedback") {
+                SoundFeedback.playStop()
+            }
             print("[Wave] stopStreaming returned: '\(text)'", to: &standardError)
 
             // Apply filler word removal if enabled

@@ -9,8 +9,16 @@ enum SoundFeedback {
     private static let tinkID = systemSoundID(for: "Tink")
 
     /// Play a short "pop" sound when recording starts.
-    static func playStart() {
-        AudioServicesPlaySystemSound(popID)
+    /// Calls the completion handler after the sound finishes so the caller
+    /// can start the audio engine without cutting off the sound.
+    static func playStart(completion: (() -> Void)? = nil) {
+        if let completion = completion {
+            AudioServicesPlaySystemSoundWithCompletion(popID) {
+                DispatchQueue.main.async { completion() }
+            }
+        } else {
+            AudioServicesPlaySystemSound(popID)
+        }
     }
 
     /// Play a "done" sound when recording stops.
