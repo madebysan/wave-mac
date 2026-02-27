@@ -16,6 +16,7 @@ class StatusBarController {
     // Callbacks
     var onStopRecording: (() -> Void)?
     var onStartDictation: (() -> Void)?
+    var onTranscribeFile: (() -> Void)?
 
     // Current state for icon display
     enum State {
@@ -79,6 +80,18 @@ class StatusBarController {
         if let appDelegate = NSApp.delegate as? AppDelegate, !appDelegate.transcriber.isReady {
             dictationItem.isEnabled = false
         }
+
+        // Transcribe File
+        let fileItem = menu.addItem(
+            withTitle: "Transcribe File\u{2026}",
+            action: #selector(transcribeFile),
+            keyEquivalent: "o"
+        )
+        fileItem.target = self
+        if let appDelegate = NSApp.delegate as? AppDelegate, !appDelegate.transcriber.isReady {
+            fileItem.isEnabled = false
+        }
+
         menu.addItem(.separator())
 
         // History
@@ -200,6 +213,10 @@ class StatusBarController {
 
     @objc private func startDictation() {
         onStartDictation?()
+    }
+
+    @objc private func transcribeFile() {
+        onTranscribeFile?()
     }
 
     @objc private func openSettings() {

@@ -175,7 +175,7 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
         y += 24
 
         let shortcutDetail = Styles.label(
-            "Press the shortcut to start dictation, press again to stop and transcribe.",
+            "The global shortcut that activates Wave from any app.",
             font: Styles.captionFont, color: Styles.secondaryLabel
         )
         shortcutDetail.translatesAutoresizingMaskIntoConstraints = false
@@ -196,6 +196,40 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
         ])
         y += 44
 
+        // ── Recording Mode ──
+
+        let modeLabel = Styles.label("Recording Mode", font: Styles.headlineFont)
+        modeLabel.translatesAutoresizingMaskIntoConstraints = false
+        outer.addSubview(modeLabel)
+        NSLayoutConstraint.activate([
+            modeLabel.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
+            modeLabel.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
+        ])
+        y += 28
+
+        let modeControl = NSSegmentedControl(labels: ["Toggle", "Push-to-talk"], trackingMode: .selectOne, target: self, action: #selector(recordingModeChanged(_:)))
+        modeControl.selectedSegment = RecordingMode.current == .pushToTalk ? 1 : 0
+        modeControl.translatesAutoresizingMaskIntoConstraints = false
+        outer.addSubview(modeControl)
+        NSLayoutConstraint.activate([
+            modeControl.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
+            modeControl.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
+        ])
+        y += 28
+
+        let modeNote = Styles.label(
+            "Toggle: press shortcut to start, press again to stop. Push-to-talk: hold shortcut to record, release to transcribe.",
+            font: Styles.captionFont, color: Styles.tertiaryLabel
+        )
+        modeNote.translatesAutoresizingMaskIntoConstraints = false
+        outer.addSubview(modeNote)
+        NSLayoutConstraint.activate([
+            modeNote.topAnchor.constraint(equalTo: outer.topAnchor, constant: y),
+            modeNote.leadingAnchor.constraint(equalTo: outer.leadingAnchor, constant: pad),
+            modeNote.trailingAnchor.constraint(equalTo: outer.trailingAnchor, constant: -pad),
+        ])
+        y += 36
+
         // ── Post-processing ──
 
         let fillerLabel = Styles.label("Post-processing", font: Styles.headlineFont)
@@ -207,7 +241,7 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
         ])
         y += 28
 
-        let fillerToggle = NSButton(checkboxWithTitle: "Remove filler words (um, uh, er, hmm)", target: self, action: #selector(toggleFiller(_:)))
+        let fillerToggle = NSButton(checkboxWithTitle: "Remove filler words and stutters", target: self, action: #selector(toggleFiller(_:)))
         fillerToggle.state = UserDefaults.standard.object(forKey: "removeFillers") == nil ? .on : (UserDefaults.standard.bool(forKey: "removeFillers") ? .on : .off)
         fillerToggle.translatesAutoresizingMaskIntoConstraints = false
         outer.addSubview(fillerToggle)
@@ -300,7 +334,12 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
 
         let langPicker = NSPopUpButton(frame: .zero, pullsDown: false)
 
-        // Popular languages first
+        // Auto-detect first
+        langPicker.addItem(withTitle: "Auto-detect")
+        langPicker.lastItem?.representedObject = "auto"
+
+        // Separator then popular languages
+        langPicker.menu?.addItem(.separator())
         for lang in popularLanguages {
             langPicker.addItem(withTitle: lang.name)
             langPicker.lastItem?.representedObject = lang.code
@@ -335,7 +374,7 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
         y += 28
 
         let langNote = Styles.label(
-            "Popular languages are listed first. All 99 Whisper-supported languages are available below the separator.",
+            "\"Auto-detect\" lets Whisper identify the spoken language automatically. Popular languages are listed first, with all 99 supported languages below.",
             font: Styles.captionFont, color: Styles.tertiaryLabel
         )
         langNote.translatesAutoresizingMaskIntoConstraints = false
@@ -472,6 +511,11 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
     }
 
     // MARK: - Actions
+
+    @objc private func recordingModeChanged(_ sender: NSSegmentedControl) {
+        let mode: RecordingMode = sender.selectedSegment == 1 ? .pushToTalk : .toggle
+        UserDefaults.standard.set(mode.rawValue, forKey: "recordingMode")
+    }
 
     @objc private func toggleFiller(_ sender: NSButton) {
         UserDefaults.standard.set(sender.state == .on, forKey: "removeFillers")
