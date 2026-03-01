@@ -19,6 +19,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var onboardingController: OnboardingWindowController?
     private var hotkeyManager: HotkeyManager!
     let transcriber = Transcriber()
+    private let mediaController = MediaController()
     private var isRecording = false
 
     // Audio file transcription result window
@@ -144,6 +145,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         self.lastSpeechTime = Date()
                     }
                 }
+                // Mute system audio 0.5s after the audio engine starts,
+                // so the engine is fully initialized and can't override it
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    guard let self = self, self.isRecording else { return }
+                    self.mediaController.muteForRecording()
+                }
             } catch {
                 self.isRecording = false
                 self.statusBarController.setState(.idle)
@@ -168,7 +175,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusBarController.setState(.transcribing)
 
         Task {
+            // Wait 1 second before cutting off — captures the last word(s)
+            // you said right before hitting stop, which otherwise get clipped.
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+
             var text = await transcriber.stopStreaming()
+
+            // Unmute system audio now that recording is done
+            await MainActor.run { mediaController.unmuteAfterRecording() }
 
             // Play stop sound after the audio engine has stopped
             if UserDefaults.standard.object(forKey: "playSoundFeedback") == nil || UserDefaults.standard.bool(forKey: "playSoundFeedback") {

@@ -196,7 +196,22 @@ class Transcriber {
         for artifact in artifacts {
             cleaned = cleaned.replacingOccurrences(of: artifact, with: "", options: .caseInsensitive)
         }
-        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Whisper hallucinates short phrases on silence — discard them.
+        // Common hallucinations: "silent", "you", "thank you", "thanks for watching", etc.
+        let lowered = cleaned.lowercased()
+        let hallucinations: Set<String> = [
+            "silent", "silence", "you", "thank you", "thank you.",
+            "thanks for watching", "thanks for watching.",
+            "thanks", "bye", "bye.", "okay", "okay.",
+            "...", "..", ".", "♪", "♪♪",
+        ]
+        if hallucinations.contains(lowered) {
+            return ""
+        }
+
+        return cleaned
     }
 
     enum TranscriberError: Error, LocalizedError {
