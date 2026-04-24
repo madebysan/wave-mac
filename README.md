@@ -5,7 +5,7 @@
 <h1 align="center">Wave</h1>
 <p align="center">Local voice-to-text for your Mac.<br>
 Press a shortcut, speak, paste. No cloud, no API keys, no subscriptions.</p>
-<p align="center"><strong>Version 0.4.0</strong> · macOS 14+ · Apple Silicon & Intel</p>
+<p align="center"><strong>Version 0.4.1</strong> · macOS 14+ · Apple Silicon & Intel</p>
 <p align="center"><a href="https://github.com/madebysan/wave-mac/releases/latest"><strong>Download Wave</strong></a></p>
 <p align="center">Also available for <a href="https://github.com/madebysan/wave-ios"><strong>iOS</strong></a></p>
 
