@@ -34,7 +34,7 @@ class AboutWindowController: NSObject, NSWindowDelegate {
 
         // App icon
         let iconView = NSImageView()
-        iconView.image = Bundle.module.image(forResource: "app-icon")
+        iconView.image = Bundle.main.image(forResource: "app-icon")
         iconView.imageScaling = .scaleProportionallyDown
         iconView.translatesAutoresizingMaskIntoConstraints = false
         outer.addSubview(iconView)
