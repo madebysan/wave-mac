@@ -156,7 +156,7 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
         let box = NSView()
 
         let icon = NSImageView()
-        icon.image = Bundle.module.image(forResource: "app-icon")
+        icon.image = Bundle.main.image(forResource: "app-icon")
         icon.imageScaling = .scaleProportionallyDown
         icon.translatesAutoresizingMaskIntoConstraints = false
         box.addSubview(icon)
